@@ -1,0 +1,311 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101318">
+<title>AI Model Importer</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#101318;color:#e8edf5;
+font:15px system-ui,sans-serif;padding-bottom:85px}
+header{padding:18px;background:#171c24;border-bottom:1px solid #303846;
+position:sticky;top:0;z-index:2}
+h1{font-size:21px;margin:0}
+p{color:#a4afc0}
+main{padding:15px;max-width:760px;margin:auto}
+section{display:none}
+section.active{display:block}
+.card{background:#171c24;border:1px solid #303846;
+padding:15px;border-radius:14px;margin:12px 0}
+input,textarea,button{font:inherit;border-radius:10px;
+padding:12px;border:1px solid #303846;
+background:#101318;color:#e8edf5;width:100%;margin:5px 0}
+button{background:#3949ab;border:0;cursor:pointer}
+textarea{resize:vertical;min-height:120px}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:5;
+display:flex;gap:4px;overflow-x:auto;padding:8px;
+background:#171c24;border-top:1px solid #303846}
+nav button{min-width:75px;flex:1;font-size:12px;
+padding:12px 7px;background:#252c38}
+nav button.selected{background:#3949ab}
+.small{font-size:12px;color:#a4afc0}
+#status{font-size:12px;color:#8fdbb0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}
+a{color:#9db6ff}
+</style>
+</head>
+<body>
+<header>
+<h1>AI Model Importer</h1>
+<div id="status">Starting workspace…</div>
+</header>
+
+<main>
+<section id="home" class="active">
+<div class="card">
+<h2>Welcome back 👋</h2>
+<p>Your notes and code are saved locally as you work.</p>
+<p id="network">Checking connection…</p>
+<button onclick="switchTab('editor')">Continue coding</button>
+</div>
+<div class="card">
+<h3>Quick actions</h3>
+<button onclick="switchTab('search')">Search models</button>
+<button onclick="switchTab('ai')">Ask Groq AI</button>
+</div>
+<div class="card">
+<h3>Saved workspace</h3>
+<p id="savedInfo">Checking local drafts…</p>
+</div>
+</section>
+
+<section id="search">
+<div class="card">
+<h2>Model Search</h2>
+<form id="searchForm">
+<input id="query" placeholder="Search by model name" required>
+<button>Search Creator Store</button>
+</form>
+<form id="idForm">
+<input id="assetId" inputmode="numeric"
+placeholder="Or enter an asset ID" required>
+<button>Look up asset</button>
+</form>
+<div id="searchOutput"><p>Search results appear here.</p></div>
+</div>
+</section>
+
+<section id="ai">
+<div class="card">
+<h2>AI Assistant</h2>
+<p>AI requires an internet connection.</p>
+<textarea id="prompt" placeholder="Ask about Luau, debugging, or game ideas..."></textarea>
+<button id="ask">Ask Groq</button>
+<div id="aiOutput"></div>
+</div>
+</section>
+
+<section id="editor">
+<div class="card">
+<h2>Code Editor</h2>
+<p class="small">Local draft · Auto-saves on this device</p>
+<input id="projectName" placeholder="Project name">
+<textarea id="code" spellcheck="false"
+placeholder="Write your Luau code or game notes here..."></textarea>
+<button id="copyCode">Copy code</button>
+<button id="downloadCode">Export draft as .lua</button>
+<button id="clearCode">Clear editor</button>
+<p id="saveStatus">Ready.</p>
+</div>
+</section>
+
+<section id="settings">
+<div class="card">
+<h2>Settings</h2>
+<p>Draft storage: this browser on this device.</p>
+<button id="exportBackup">Export workspace backup</button>
+<p class="small">Export backups regularly. Clearing browser data
+or using private browsing may remove local drafts.</p>
+</div>
+</section>
+</main>
+
+<nav>
+<button data-tab="home" class="selected">Home</button>
+<button data-tab="search">Models</button>
+<button data-tab="ai">AI</button>
+<button data-tab="editor">Code</button>
+<button data-tab="settings">Settings</button>
+</nav>
+
+<script>
+const $ = id => document.getElementById(id);
+const KEY = "aimi-workspace-v1";
+let saveTimer;
+
+function getWorkspace() {
+  try {
+    return JSON.parse(localStorage.getItem(KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveWorkspace() {
+  clearTimeout(saveTimer);
+  $("saveStatus").textContent = "Saving…";
+
+  saveTimer = setTimeout(() => {
+    try {
+      const data = {
+        projectName: $("projectName").value,
+        code: $("code").value,
+        prompt: $("prompt").value,
+        query: $("query").value,
+        assetId: $("assetId").value,
+        lastSaved: new Date().toISOString()
+      };
+      localStorage.setItem(KEY, JSON.stringify(data));
+      $("saveStatus").textContent =
+        "Saved locally at " + new Date().toLocaleTimeString();
+      $("savedInfo").textContent =
+        "Last saved: " + new Date(data.lastSaved).toLocaleString();
+      $("status").textContent = "Local auto-save enabled";
+    } catch {
+      $("saveStatus").textContent =
+        "Save failed. Export a backup before continuing.";
+      $("status").textContent = "Storage unavailable";
+    }
+  }, 250);
+}
+
+function restoreWorkspace() {
+  const d = getWorkspace();
+  $("projectName").value = d.projectName || "";
+  $("code").value = d.code || "";
+  $("prompt").value = d.prompt || "";
+  $("query").value = d.query || "";
+  $("assetId").value = d.assetId || "";
+  if (d.lastSaved) {
+    $("savedInfo").textContent =
+      "Last saved: " + new Date(d.lastSaved).toLocaleString();
+  }
+}
+
+function switchTab(name) {
+  document.querySelectorAll("main section").forEach(s =>
+    s.classList.toggle("active", s.id === name));
+  document.querySelectorAll("nav button").forEach(b =>
+    b.classList.toggle("selected", b.dataset.tab === name));
+  try { sessionStorage.setItem("aimi-tab", name); } catch {}
+}
+
+document.querySelectorAll("nav button").forEach(b =>
+  b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+["projectName","code","prompt","query","assetId"].forEach(id =>
+  $(id).addEventListener("input", saveWorkspace));
+
+function updateNetwork() {
+  $("network").textContent = navigator.onLine
+    ? "🟢 Online — API features available"
+    : "🟠 Offline — local editing still works";
+}
+window.addEventListener("online", updateNetwork);
+window.addEventListener("offline", updateNetwork);
+
+async function api(url, options = {}) {
+  if (!navigator.onLine) throw new Error("You're offline.");
+  const r = await fetch(url, options);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+$("searchForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("searchOutput").textContent = "Searching…";
+  try {
+    const data = await api("/api/search?q=" +
+      encodeURIComponent($("query").value.trim()));
+    $("searchOutput").replaceChildren();
+    const pre = document.createElement("pre");
+    pre.textContent = JSON.stringify(data, null, 2);
+    $("searchOutput").append(pre);
+  } catch (err) {
+    $("searchOutput").textContent = err.message;
+  }
+});
+
+$("idForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const id = $("assetId").value.trim();
+  if (!/^\d{1,20}$/.test(id)) {
+    $("searchOutput").textContent = "Enter a numeric asset ID.";
+    return;
+  }
+  $("searchOutput").textContent = "Looking up asset…";
+  try {
+    const data = await api("/api/asset/" + encodeURIComponent(id));
+    $("searchOutput").replaceChildren();
+    const pre = document.createElement("pre");
+    pre.textContent = JSON.stringify(data, null, 2);
+    $("searchOutput").append(pre);
+  } catch (err) {
+    $("searchOutput").textContent = err.message;
+  }
+});
+
+$("ask").addEventListener("click", async () => {
+  $("aiOutput").textContent = "Thinking…";
+  saveWorkspace();
+  try {
+    const data = await api("/api/ai", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({prompt: $("prompt").value})
+    });
+    $("aiOutput").textContent = data.answer;
+  } catch (err) {
+    $("aiOutput").textContent = err.message;
+  }
+});
+
+$("copyCode").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($("code").value);
+    $("saveStatus").textContent = "Code copied.";
+  } catch {
+    $("saveStatus").textContent = "Clipboard unavailable; select and copy manually.";
+  }
+};
+
+$("downloadCode").onclick = () => {
+  const blob = new Blob([ $("code").value ], {
+    type: "text/plain;charset=utf-8"
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = ($("projectName").value || "draft") + ".lua";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+$("clearCode").onclick = () => {
+  if (confirm("Clear the editor? Export a backup first if needed.")) {
+    $("code").value = "";
+    saveWorkspace();
+  }
+};
+
+$("exportBackup").onclick = () => {
+  const blob = new Blob([JSON.stringify(getWorkspace(), null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "ai-model-importer-backup.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+restoreWorkspace();
+updateNetwork();
+
+try {
+  const lastTab = sessionStorage.getItem("aimi-tab");
+  if (lastTab && $(lastTab)) switchTab(lastTab);
+} catch {}
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+</script>
+</body>
+  </html>
+  
