@@ -1,0 +1,9 @@
+{
+  "name": "AI Model Importer",
+  "short_name": "AI Model Importer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c1017",
+  "theme_color": "#11151d",
+  "description": "Offline-first Roblox and Luau workspace"
+}
